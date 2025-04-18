@@ -7,7 +7,7 @@
   import BookingConfirmation from '../components/booking-confirmation/BookingConfirmation.svelte';
   import UserInfoCollection from '../components/user-info-collection/UserInfoCollection.svelte';
   import PaymentPage from '../components/payment/PaymentPage.svelte';
-  import BookingComplete from '../components/booking-complete/BookingComplete.svelte';
+  import BookingConfirmationPage from '../components/confirmation/BookingConfirmationPage.svelte';
   import type { Location, Coordinates } from '$lib/utils/location';
   import { getCurrentLocation } from '$lib/utils/location';
   import { bookingStore } from '$lib/stores/booking';
@@ -189,7 +189,7 @@
         on:paymentComplete={handlePaymentComplete}
       />
     {:else if currentView === 'final-confirmation'}
-      <BookingComplete
+      <BookingConfirmationPage
         on:done={handleBookingCompleteDone}
       />
     {/if}

@@ -87,14 +87,15 @@
 
   function handleComplete() {
     if (legalDisclosureAccepted) {
-      dispatch('complete');
+      // dispatch('complete');
+      alert('All done!');
     } else {
       showLegalDisclosure = true;
     }
   }
 </script>
 
-<div class="space-y-8 mt-20">
+<div class="space-y-8 mt-12">
   <div class="text-center mb-8">
     <div class="bg-green-100 p-4 rounded-full inline-block mx-auto">
       <CheckCircle class="w-8 h-8 text-green-500" />

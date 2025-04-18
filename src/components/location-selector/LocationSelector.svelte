@@ -63,16 +63,10 @@
 
   const handleLocationSelect = (event: CustomEvent<{ location: Location }>) => {
     selectedLocation = event.detail.location;
-    if (serviceType === 'in-home') {
-      currentState = 'confirming-address';
-    } else {
-      // For in-office, we'll wait for the next event to complete
-      // The next event will be triggered by the Confirm Location button
-    }
   };
 
   const handleLocationNext = () => {
-    if (serviceType === 'in-office' && selectedLocation) {
+    if ((serviceType === 'in-office' || serviceType === 'in-home') && selectedLocation) {
       dispatch('complete', { 
         serviceType: serviceType,
         location: selectedLocation

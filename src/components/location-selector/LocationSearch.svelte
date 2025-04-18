@@ -7,6 +7,7 @@
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
   import { navigationStore } from '$lib/stores/navigation';
+  import { bookingStore } from '$lib/stores/booking';
 
   // Use environment variable for Mapbox access token
   mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
@@ -47,6 +48,20 @@
   let mapContainer: HTMLDivElement;
   let selectedLocation: Location | null = null;
   let markers: mapboxgl.Marker[] = [];
+  let searchResults: any[] = [];
+  let showSearchResults = false;
+  let searchTimeout: NodeJS.Timeout;
+
+  // Load saved location from booking store
+  $: {
+    const bookingState = $bookingStore;
+    if (bookingState.location && !selectedLocation) {
+      selectedLocation = bookingState.location;
+      searchQuery = bookingState.location.address;
+      // Dispatch the selection event to update parent components
+      dispatch('select', { location: bookingState.location });
+    }
+  }
 
   // Mock data - replace with actual API call
   const mockLocations: Location[] = [
@@ -106,15 +121,158 @@
     }
   }
 
+  // Initialize Mapbox Geocoder
+  const initializeGeocoder = () => {
+    if (!map) return;
+    
+    // Use a different approach for geocoding that doesn't rely on the Geocoder class
+    // We'll use the search input and API directly instead
+    
+    // Add a search box to the map
+    const searchBox = document.createElement('div');
+    searchBox.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+    searchBox.style.backgroundColor = 'white';
+    searchBox.style.padding = '10px';
+    searchBox.style.borderRadius = '4px';
+    searchBox.style.boxShadow = '0 0 0 2px rgba(0,0,0,.1)';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Enter your address';
+    input.className = 'input-field';
+    input.style.width = '200px';
+    
+    searchBox.appendChild(input);
+    map.getContainer().appendChild(searchBox);
+    
+    // Position the search box
+    searchBox.style.position = 'absolute';
+    searchBox.style.top = '10px';
+    searchBox.style.left = '10px';
+    searchBox.style.zIndex = '1';
+    
+    // Handle input changes
+    input.addEventListener('input', async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const query = target.value;
+      
+      if (query.length < 3) return;
+      
+      try {
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+          `access_token=${mapboxgl.accessToken}&country=us&types=address&limit=5`
+        );
+        const data = await response.json();
+        
+        // Create a dropdown for results
+        let resultsContainer = document.getElementById('geocoder-results');
+        if (!resultsContainer) {
+          resultsContainer = document.createElement('div');
+          resultsContainer.id = 'geocoder-results';
+          resultsContainer.style.position = 'absolute';
+          resultsContainer.style.top = '50px';
+          resultsContainer.style.left = '10px';
+          resultsContainer.style.width = '200px';
+          resultsContainer.style.backgroundColor = 'white';
+          resultsContainer.style.borderRadius = '4px';
+          resultsContainer.style.boxShadow = '0 0 0 2px rgba(0,0,0,.1)';
+          resultsContainer.style.zIndex = '2';
+          resultsContainer.style.maxHeight = '200px';
+          resultsContainer.style.overflowY = 'auto';
+          map.getContainer().appendChild(resultsContainer);
+        }
+        
+        // Clear previous results
+        resultsContainer.innerHTML = '';
+        
+        // Add results to dropdown
+        data.features.forEach((feature: any) => {
+          const resultItem = document.createElement('div');
+          resultItem.className = 'p-2 hover:bg-gray-100 cursor-pointer';
+          resultItem.textContent = feature.place_name;
+          
+          resultItem.addEventListener('click', () => {
+            const coordinates = {
+              latitude: feature.center[1],
+              longitude: feature.center[0]
+            };
+            
+            handleLocationSelect({
+              name: 'Your Location',
+              address: feature.place_name,
+              coordinates
+            });
+            
+            // Update the search input
+            input.value = feature.place_name;
+            
+            // Hide results
+            resultsContainer.style.display = 'none';
+          });
+          
+          resultsContainer.appendChild(resultItem);
+        });
+        
+        // Show results
+        resultsContainer.style.display = data.features.length > 0 ? 'block' : 'none';
+      } catch (error) {
+        console.error('Error fetching address suggestions:', error);
+      }
+    });
+  };
+
   const handleSearch = async () => {
-    isSearching = true;
-    // TODO: Implement actual search functionality
-    // For now, just filter mock data
-    locations = mockLocations.filter(loc => 
-      loc.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      loc.address.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    isSearching = false;
+    if (serviceType === 'in-home') {
+      // Clear previous timeout if it exists
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+
+      // Show searching state immediately
+      isSearching = true;
+      showSearchResults = false;
+
+      // Add a small delay to prevent too many API calls while typing
+      searchTimeout = setTimeout(async () => {
+        try {
+          const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?` +
+            `access_token=${mapboxgl.accessToken}&country=us&types=address&limit=5`
+          );
+          const data = await response.json();
+          searchResults = data.features;
+          showSearchResults = true;
+        } catch (error) {
+          console.error('Error fetching address suggestions:', error);
+          searchResults = [];
+        } finally {
+          isSearching = false;
+        }
+      }, 300); // 300ms delay
+    } else {
+      // Existing office location search logic
+      locations = mockLocations.filter(loc => 
+        loc.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        loc.address.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+  };
+
+  const handleSearchResultClick = (result: any) => {
+    const coordinates = {
+      latitude: result.center[1],
+      longitude: result.center[0]
+    };
+    
+    handleLocationSelect({
+      name: 'Your Location',
+      address: result.place_name,
+      coordinates
+    });
+    
+    showSearchResults = false;
+    searchQuery = result.place_name;
   };
 
   const handleLocationSelect = (location: Location) => {
@@ -127,7 +285,6 @@
   const initializeMap = () => {
     if (!mapContainer) return;
 
-    // Initialize map with a closer zoom
     map = new mapboxgl.Map({
       container: mapContainer,
       style: 'mapbox://styles/mapbox/light-v11',
@@ -135,18 +292,19 @@
       zoom: 20
     });
 
-    // Add navigation controls
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Wait for map to load before adding markers
     map.on('load', () => {
       updateMapMarkers();
       
-      // If we have user coordinates, zoom out to show ~100 mile radius
+      if (serviceType === 'in-home') {
+        initializeGeocoder();
+      }
+      
       if (userCoordinates && map) {
         map.flyTo({
           center: [userCoordinates.longitude, userCoordinates.latitude],
-          zoom: 7, // This zoom level shows roughly 100 mile radius
+          zoom: 7,
           duration: 1000
         });
       }
@@ -236,9 +394,19 @@
 
   onMount(() => {
     initializeMap();
+    
+    // Center map on saved location if available
+    if (selectedLocation && map) {
+      setTimeout(() => {
+        centerMapOnSelection();
+      }, 500); // Give map time to initialize
+    }
   });
 
   onDestroy(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
     if (map) {
       map.remove();
     }
@@ -295,13 +463,13 @@
     </div>
   {/if}
 
-  <!-- Confirm Location Button (for in-office when location is selected) -->
-  {#if serviceType === 'in-office' && selectedLocation}
+  <!-- Confirm Location Button (for both in-office and in-home when location is selected) -->
+  {#if selectedLocation}
     <button
       class="btn-primary w-full mb-4"
       on:click={() => dispatch('next')}
     >
-      Confirm Location
+      Confirm {serviceType === 'in-home' ? 'Address' : 'Location'}
     </button>
   {/if}
 
@@ -317,6 +485,33 @@
       placeholder={serviceType === 'in-home' ? "Enter your address" : "Search locations"}
       class="input-field pl-10"
     />
+    {#if serviceType === 'in-home' && isSearching}
+      <div class="absolute right-3 top-1/2 -translate-y-1/2">
+        <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
+      </div>
+    {/if}
+    {#if serviceType === 'in-home' && showSearchResults && searchResults.length > 0}
+      <div class="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg">
+        <ul class="py-1">
+          {#each searchResults as result}
+            <li>
+              <button
+                class="w-full px-4 py-2 text-left hover:bg-gray-100"
+                on:click={() => handleSearchResultClick(result)}
+              >
+                <p class="text-sm text-gray-900">{result.place_name}</p>
+                <p class="text-xs text-gray-500">{result.context?.map((c: any) => c.text).join(', ')}</p>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+    {#if serviceType === 'in-home' && !isSearching && searchQuery && searchResults.length === 0}
+      <div class="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg p-4 text-center text-gray-500">
+        No addresses found. Try a different search.
+      </div>
+    {/if}
   </div>
 
   <!-- Map -->
@@ -349,15 +544,5 @@
         </button>
       {/each}
     </div>
-  {:else}
-    <button
-      class="btn-primary w-full"
-      on:click={() => handleLocationSelect({
-        address: searchQuery,
-        coordinates: userCoordinates || { latitude: 0, longitude: 0 }
-      })}
-    >
-      Confirm Address
-    </button>
   {/if}
 </div> 

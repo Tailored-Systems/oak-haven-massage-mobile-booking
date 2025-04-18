@@ -2,6 +2,7 @@
   import { createEventDispatcher, onDestroy } from 'svelte';
   import { Building2, Home, ChevronRight, UserCircle } from 'lucide-svelte';
   import { navigationStore } from '$lib/stores/navigation';
+  import { bookingStore } from '$lib/stores/booking';
 
   export let showBackButton = false;
   export let isLoggedIn = false;
@@ -26,6 +27,16 @@
       stepName: 'Select Location Type',
       onBack: () => dispatch('back')
     });
+  }
+
+  // Load saved service type from booking store
+  $: {
+    const bookingState = $bookingStore;
+    if (bookingState.serviceType) {
+      // We'll just log that we found a saved service type
+      // but we won't automatically select it to avoid navigation issues
+      console.log('Found saved service type:', bookingState.serviceType);
+    }
   }
 
   // We don't need to reset navigation here since each component

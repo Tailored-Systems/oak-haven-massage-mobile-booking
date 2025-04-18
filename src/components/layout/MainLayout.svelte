@@ -168,7 +168,7 @@
   {/if}
 
   <!-- Main Content -->
-  <main class="flex-1 mt-20">
+  <main class="flex-1 mt-28">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <slot />
     </div>

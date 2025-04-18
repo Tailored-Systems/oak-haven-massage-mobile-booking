@@ -51,7 +51,7 @@
     navigationStore.setNavigation({
       showBack: false,
       showNext: false,
-      stepName: 'Booking Complete',
+      stepName: '',
       onBack: () => {},
       showBookButton: false
     });
